@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="ko">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ATELIER NORD — Photo Exhibition</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Figtree:wght@400;500;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <header class="hero">
+      <img
+        class="hero__image"
+        src="https://picsum.photos/seed/atelier-nord-hero/1600/1000"
+        alt=""
+        width="1600"
+        height="1000"
+      />
+      <div class="hero__veil"></div>
+      <div class="hero__content">
+        <p class="hero__brand">Atelier Nord</p>
+        <h1 class="hero__title">빛의 가장자리에서</h1>
+        <p class="hero__lead">30점의 순간이 모인 가상의 사진 전시회</p>
+        <a class="hero__cta" href="#gallery">전시 입장</a>
+      </div>
+    </header>
+
+    <main>
+      <section class="gallery" id="gallery" aria-labelledby="gallery-heading">
+        <div class="gallery__intro">
+          <div class="gallery__intro-top">
+            <h2 id="gallery-heading">Collection</h2>
+            <button
+              class="gallery__renew"
+              id="renew-btn"
+              type="button"
+            >
+              전시 갱신
+            </button>
+          </div>
+          <p>익명의 시선으로 포착한 풍경, 인물, 그리고 고요한 일상.</p>
+        </div>
+        <div class="gallery__grid" id="gallery-grid"></div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <p class="footer__brand">Atelier Nord</p>
+      <p class="footer__note">Images courtesy of Lorem Picsum</p>
+    </footer>
+
+    <dialog class="lightbox" id="lightbox" aria-label="사진 확대 보기">
+      <button class="lightbox__close" type="button" aria-label="닫기">
+        닫기
+      </button>
+      <img class="lightbox__image" id="lightbox-image" alt="" />
+      <p class="lightbox__caption" id="lightbox-caption"></p>
+    </dialog>
+
+    <script src="script.js"></script>
+  </body>
+</html>
