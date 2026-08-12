@@ -1,0 +1,6 @@
+node_modules/
+.env
+Exhibition.env
+.DS_Store
+.caption-preview/
+*.log

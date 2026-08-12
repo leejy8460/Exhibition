@@ -3,14 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ATELIER NORD — Photo Exhibition</title>
+    <title>ATELIER NORD — AI Edition</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Figtree:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=3" />
+    <link rel="stylesheet" href="styles.css?v=4" />
   </head>
   <body>
     <header class="hero">
@@ -25,7 +25,7 @@
       <div class="hero__content">
         <p class="hero__brand">Atelier Nord</p>
         <h1 class="hero__title">빛의 가장자리에서</h1>
-        <p class="hero__lead">30점의 순간이 모인 가상의 사진 전시회</p>
+        <p class="hero__lead">OpenAI가 제목을 붙이는 사진 전시회</p>
         <a class="hero__cta" href="#gallery">전시 입장</a>
       </div>
     </header>
@@ -57,16 +57,16 @@
               </button>
             </div>
           </div>
-          <p>익명의 시선으로 포착한 풍경, 인물, 그리고 고요한 일상.</p>
+          <p>OpenAI가 사진 내용을 보고 붙인 전시 제목과 함께 감상하세요.</p>
         </div>
         <div class="gallery__grid" id="gallery-grid"></div>
       </section>
     </main>
 
     <footer class="footer">
-      <p class="footer__brand">Atelier Nord</p>
+      <p class="footer__brand">Atelier Nord · AI</p>
       <p class="footer__note">
-        <a href="./ai/">AI 제목 버전 보기</a>
+        <a href="../">기본 버전 보기</a>
         · Images courtesy of Lorem Picsum
       </p>
     </footer>
@@ -78,6 +78,7 @@
       <img class="lightbox__image" id="lightbox-image" alt="" />
     </dialog>
 
-    <script src="script.js?v=3"></script>
+    <script src="config.js"></script>
+    <script src="script.js?v=5"></script>
   </body>
 </html>
