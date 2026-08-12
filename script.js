@@ -23,6 +23,8 @@ let itemObserver = null;
 let currentBatchId = null;
 let currentColumnCount = null;
 let relayoutTimer = null;
+let captionRequestId = 0;
+const titlesById = new Map();
 
 function createBatchId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
@@ -57,9 +59,55 @@ function disconnectObserver() {
   }
 }
 
-function createGallery({ renew = false } = {}) {
+function formatCaption(label, title) {
+  return title ? `${label} · ${title}` : `${label} · …`;
+}
+
+function captionImageUrl(seed, width, height) {
+  const scale = Math.min(1, 320 / width);
+  const w = Math.max(160, Math.round(width * scale));
+  const h = Math.max(160, Math.round(height * scale));
+  return `https://picsum.photos/seed/${seed}/${w}/${h}`;
+}
+
+async function fetchCaptions(images) {
+  const response = await fetch("/api/captions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ images }),
+  });
+
+  if (!response.ok) {
+    const detail = await response.json().catch(() => ({}));
+    throw new Error(detail.error || "제목 생성에 실패했습니다.");
+  }
+
+  return response.json();
+}
+
+function applyTitlesToDom() {
+  grid.querySelectorAll(".gallery__item").forEach((button) => {
+    const id = button.dataset.imageId;
+    const label = button.dataset.label;
+    const title = titlesById.get(id) || "";
+    const caption = formatCaption(label, title);
+    const meta = button.querySelector(".gallery__meta");
+    const img = button.querySelector("img");
+
+    if (meta) meta.textContent = caption;
+    if (img) img.alt = caption;
+    button.setAttribute("aria-label", `${caption} 크게 보기`);
+    button.dataset.caption = caption;
+  });
+}
+
+async function createGallery({ renew = false } = {}) {
   if (renew || !currentBatchId) {
     currentBatchId = createBatchId();
+  }
+
+  if (renew) {
+    titlesById.clear();
   }
 
   applyPhotoSize();
@@ -71,43 +119,86 @@ function createGallery({ renew = false } = {}) {
   grid.replaceChildren();
 
   const fragment = document.createDocumentFragment();
+  const missing = [];
 
   for (let i = 0; i < IMAGE_COUNT; i += 1) {
     const row = Math.floor(i / columnCount);
     const [width, height] = ROW_SIZES[row % ROW_SIZES.length];
-    const src = `https://picsum.photos/seed/${currentBatchId}-${i + 1}/${width}/${height}`;
+    const seed = `${currentBatchId}-${i + 1}`;
+    const imageId = seed;
+    const src = `https://picsum.photos/seed/${seed}/${width}/${height}`;
     const number = i + 1;
     const label = `No. ${String(number).padStart(2, "0")}`;
+    const existingTitle = titlesById.get(imageId) || "";
+    const caption = formatCaption(label, existingTitle);
 
     const button = document.createElement("button");
     button.type = "button";
     button.className = "gallery__item";
-    button.setAttribute("aria-label", `${label} 크게 보기`);
+    button.dataset.imageId = imageId;
+    button.dataset.label = label;
+    button.dataset.caption = caption;
+    button.setAttribute("aria-label", `${caption} 크게 보기`);
 
     const img = document.createElement("img");
     img.src = src;
-    img.alt = label;
+    img.alt = caption;
     img.loading = renew ? "eager" : "lazy";
     img.width = width;
     img.height = height;
 
     const meta = document.createElement("p");
     meta.className = "gallery__meta";
-    meta.textContent = label;
+    meta.textContent = caption;
 
     button.append(img, meta);
     button.addEventListener("click", () => {
       openLightbox(
-        `https://picsum.photos/seed/${currentBatchId}-${i + 1}/1200/900`,
-        label
+        `https://picsum.photos/seed/${seed}/1200/900`,
+        button.dataset.caption || caption
       );
     });
 
     fragment.append(button);
+
+    if (!existingTitle) {
+      missing.push({
+        id: imageId,
+        url: captionImageUrl(seed, width, height),
+      });
+    }
   }
 
   grid.append(fragment);
   observeItems();
+
+  if (missing.length === 0) return;
+
+  const requestId = ++captionRequestId;
+
+  try {
+    const { captions } = await fetchCaptions(missing);
+    if (requestId !== captionRequestId) return;
+
+    captions.forEach((item) => {
+      if (item?.id && item?.title) {
+        titlesById.set(item.id, item.title);
+      }
+    });
+
+    applyTitlesToDom();
+  } catch (error) {
+    if (requestId !== captionRequestId) return;
+    console.error(error);
+    grid.querySelectorAll(".gallery__item").forEach((button) => {
+      const label = button.dataset.label;
+      const meta = button.querySelector(".gallery__meta");
+      if (meta && !titlesById.has(button.dataset.imageId)) {
+        meta.textContent = label;
+        button.dataset.caption = label;
+      }
+    });
+  }
 }
 
 function scheduleRelayout() {
@@ -119,7 +210,7 @@ function scheduleRelayout() {
   }, 120);
 }
 
-function renewExhibition() {
+async function renewExhibition() {
   if (renewBtn.disabled) return;
 
   renewBtn.disabled = true;
@@ -134,16 +225,17 @@ function renewExhibition() {
     heroImage.src = `https://picsum.photos/seed/atelier-nord-hero-${createBatchId()}/1600/1000`;
   }
 
-  window.requestAnimationFrame(() => {
-    createGallery({ renew: true });
+  try {
+    await createGallery({ renew: true });
+  } finally {
     grid.classList.remove("is-renewing");
     renewBtn.disabled = false;
     renewBtn.textContent = "전시 갱신";
+  }
 
-    document.getElementById("gallery").scrollIntoView({
-      behavior: "smooth",
-      block: "start",
-    });
+  document.getElementById("gallery").scrollIntoView({
+    behavior: "smooth",
+    block: "start",
   });
 }
 
@@ -199,6 +291,8 @@ lightbox.addEventListener("click", (event) => {
   }
 });
 
-renewBtn.addEventListener("click", renewExhibition);
+renewBtn.addEventListener("click", () => {
+  renewExhibition();
+});
 
 createGallery();

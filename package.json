@@ -1,0 +1,15 @@
+{
+  "name": "atelier-nord-exhibition",
+  "version": "2.0.0",
+  "private": true,
+  "description": "Virtual photo exhibition with optional OpenAI titles",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "openai": "^4.86.2"
+  }
+}
