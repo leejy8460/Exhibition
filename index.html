@@ -35,13 +35,27 @@
         <div class="gallery__intro">
           <div class="gallery__intro-top">
             <h2 id="gallery-heading">Collection</h2>
-            <button
-              class="gallery__renew"
-              id="renew-btn"
-              type="button"
-            >
-              전시 갱신
-            </button>
+            <div class="gallery__controls">
+              <label class="gallery__size" for="size-slider">
+                <span class="gallery__size-label">사진 크기</span>
+                <input
+                  class="gallery__size-input"
+                  id="size-slider"
+                  type="range"
+                  min="160"
+                  max="480"
+                  value="280"
+                  step="10"
+                />
+              </label>
+              <button
+                class="gallery__renew"
+                id="renew-btn"
+                type="button"
+              >
+                전시 갱신
+              </button>
+            </div>
           </div>
           <p>익명의 시선으로 포착한 풍경, 인물, 그리고 고요한 일상.</p>
         </div>
@@ -59,7 +73,6 @@
         닫기
       </button>
       <img class="lightbox__image" id="lightbox-image" alt="" />
-      <p class="lightbox__caption" id="lightbox-caption"></p>
     </dialog>
 
     <script src="script.js"></script>

@@ -1,65 +1,48 @@
 const IMAGE_COUNT = 30;
-const TITLES = [
-  "새벽 안개",
-  "창가의 그림자",
-  "고요한 해안",
-  "골목의 빛",
-  "고요한 방",
-  "바람의 결",
-  "먼 언덕",
-  "비 온 뒤",
-  "저녁 기차",
-  "흰 커튼",
-  "도시의 숨",
-  "얇은 구름",
-  "오래된 문",
-  "푸른 잔디",
-  "유리 너머",
-  "느린 오후",
-  "돌계단",
-  "나뭇잎 사이",
-  "빈 의자",
-  "노을 직전",
-  "물결 자국",
-  "따뜻한 벽",
-  "조용한 거리",
-  "열린 창문",
-  "석양 아래",
-  "먼 섬",
-  "회색 하늘",
-  "작은 정원",
-  "밤의 가장자리",
-  "아침 식탁",
-];
 
-const SIZES = [
-  [480, 640],
-  [480, 480],
-  [480, 720],
-  [480, 560],
-  [480, 600],
+/** Picsum에서 받는 원본 가로 크기(= 화면 표시 최대 크기) */
+const PHOTO_MAX_WIDTH = 480;
+
+/** 가로줄마다 다른 세로 비율. 같은 줄의 사진끼리는 동일한 크기 */
+const ROW_SIZES = [
+  [PHOTO_MAX_WIDTH, 640],
+  [PHOTO_MAX_WIDTH, 480],
+  [PHOTO_MAX_WIDTH, 720],
+  [PHOTO_MAX_WIDTH, 560],
+  [PHOTO_MAX_WIDTH, 600],
 ];
 
 const grid = document.getElementById("gallery-grid");
 const renewBtn = document.getElementById("renew-btn");
+const sizeSlider = document.getElementById("size-slider");
 const heroImage = document.querySelector(".hero__image");
 const lightbox = document.getElementById("lightbox");
 const lightboxImage = document.getElementById("lightbox-image");
-const lightboxCaption = document.getElementById("lightbox-caption");
 
 let itemObserver = null;
+let currentBatchId = null;
+let currentColumnCount = null;
+let relayoutTimer = null;
 
 function createBatchId() {
   return `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 }
 
-function shuffle(list) {
-  const copy = [...list];
-  for (let i = copy.length - 1; i > 0; i -= 1) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [copy[i], copy[j]] = [copy[j], copy[i]];
-  }
-  return copy;
+function getPhotoSize() {
+  return Number(sizeSlider.value);
+}
+
+function applyPhotoSize() {
+  const size = Math.min(getPhotoSize(), PHOTO_MAX_WIDTH);
+  grid.style.setProperty("--photo-size", `${size}px`);
+}
+
+function getColumnCount() {
+  const styles = getComputedStyle(grid);
+  const gap = parseFloat(styles.columnGap) || 20;
+  const width = grid.clientWidth;
+  const photoSize = Math.min(getPhotoSize(), width || getPhotoSize());
+  return Math.max(1, Math.floor((width + gap) / (photoSize + gap)));
 }
 
 function disconnectObserver() {
@@ -70,8 +53,14 @@ function disconnectObserver() {
 }
 
 function createGallery({ renew = false } = {}) {
-  const batchId = createBatchId();
-  const titles = renew ? shuffle(TITLES) : TITLES;
+  if (renew || !currentBatchId) {
+    currentBatchId = createBatchId();
+  }
+
+  applyPhotoSize();
+
+  const columnCount = getColumnCount();
+  currentColumnCount = columnCount;
 
   disconnectObserver();
   grid.replaceChildren();
@@ -79,31 +68,34 @@ function createGallery({ renew = false } = {}) {
   const fragment = document.createDocumentFragment();
 
   for (let i = 0; i < IMAGE_COUNT; i += 1) {
-    const [width, height] = SIZES[i % SIZES.length];
-    const seed = `${batchId}-${i + 1}`;
-    const src = `https://picsum.photos/seed/${seed}/${width}/${height}`;
-    const title = titles[i];
-    const label = `No. ${String(i + 1).padStart(2, "0")}`;
+    const row = Math.floor(i / columnCount);
+    const [width, height] = ROW_SIZES[row % ROW_SIZES.length];
+    const src = `https://picsum.photos/seed/${currentBatchId}-${i + 1}/${width}/${height}`;
+    const number = i + 1;
+    const label = `No. ${String(number).padStart(2, "0")}`;
 
     const button = document.createElement("button");
     button.type = "button";
     button.className = "gallery__item";
-    button.setAttribute("aria-label", `${label} ${title} 크게 보기`);
+    button.setAttribute("aria-label", `${label} 크게 보기`);
 
     const img = document.createElement("img");
     img.src = src;
-    img.alt = title;
+    img.alt = label;
     img.loading = renew ? "eager" : "lazy";
     img.width = width;
     img.height = height;
 
     const meta = document.createElement("p");
     meta.className = "gallery__meta";
-    meta.textContent = `${label} · ${title}`;
+    meta.textContent = label;
 
     button.append(img, meta);
     button.addEventListener("click", () => {
-      openLightbox(src, `${label} · ${title}`);
+      openLightbox(
+        `https://picsum.photos/seed/${currentBatchId}-${i + 1}/1200/900`,
+        label
+      );
     });
 
     fragment.append(button);
@@ -111,6 +103,15 @@ function createGallery({ renew = false } = {}) {
 
   grid.append(fragment);
   observeItems();
+}
+
+function scheduleRelayout() {
+  window.clearTimeout(relayoutTimer);
+  relayoutTimer = window.setTimeout(() => {
+    if (getColumnCount() !== currentColumnCount) {
+      createGallery({ renew: false });
+    }
+  }, 120);
 }
 
 function renewExhibition() {
@@ -167,12 +168,21 @@ function observeItems() {
   });
 }
 
-function openLightbox(src, caption) {
-  lightboxImage.src = src.replace(/\/\d+\/\d+$/, "/1200/900");
-  lightboxImage.alt = caption;
-  lightboxCaption.textContent = caption;
+function openLightbox(src, label) {
+  lightboxImage.src = src;
+  lightboxImage.alt = label;
   lightbox.showModal();
 }
+
+sizeSlider.max = String(PHOTO_MAX_WIDTH);
+sizeSlider.addEventListener("input", () => {
+  applyPhotoSize();
+  scheduleRelayout();
+});
+
+window.addEventListener("resize", () => {
+  scheduleRelayout();
+});
 
 lightbox.querySelector(".lightbox__close").addEventListener("click", () => {
   lightbox.close();
