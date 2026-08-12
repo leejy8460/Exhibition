@@ -237,14 +237,11 @@ a {
 .gallery__grid {
   --photo-size: 280px;
   --gallery-gap: 1.25rem;
-  display: grid;
-  grid-template-columns: repeat(
-    auto-fill,
-    minmax(min(100%, var(--photo-size)), min(100%, var(--photo-size)))
-  );
+  display: flex;
+  flex-wrap: wrap;
   gap: var(--gallery-gap);
-  justify-content: start;
-  align-items: start;
+  justify-content: flex-start;
+  align-items: flex-start;
 }
 
 .gallery__item {
@@ -252,12 +249,15 @@ a {
   padding: 0;
   border: 0;
   background: transparent;
-  width: 100%;
+  flex: 0 0 min(100%, var(--photo-size));
+  width: min(100%, var(--photo-size));
+  max-width: 100%;
   cursor: zoom-in;
   text-align: left;
   opacity: 0;
   transform: translateY(24px);
-  transition: opacity 0.7s ease, transform 0.7s ease;
+  transition: opacity 0.7s ease, transform 0.7s ease, width 0.15s ease,
+    flex-basis 0.15s ease;
 }
 
 .gallery__item.is-visible {

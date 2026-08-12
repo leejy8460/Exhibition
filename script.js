@@ -34,12 +34,17 @@ function getPhotoSize() {
 
 function applyPhotoSize() {
   const size = Math.min(getPhotoSize(), PHOTO_MAX_WIDTH);
-  grid.style.setProperty("--photo-size", `${size}px`);
+  const sizePx = `${size}px`;
+  grid.style.setProperty("--photo-size", sizePx);
+  document.documentElement.style.setProperty("--photo-size", sizePx);
 }
 
 function getColumnCount() {
   const styles = getComputedStyle(grid);
-  const gap = parseFloat(styles.columnGap) || 20;
+  const gap =
+    parseFloat(styles.columnGap) ||
+    parseFloat(styles.gap) ||
+    20;
   const width = grid.clientWidth;
   const photoSize = Math.min(getPhotoSize(), width || getPhotoSize());
   return Math.max(1, Math.floor((width + gap) / (photoSize + gap)));
