@@ -90,6 +90,18 @@ async function fetchCaptions(images) {
   return response.json();
 }
 
+async function fetchCaptionsInBatches(images, batchSize = 6) {
+  const captions = [];
+
+  for (let i = 0; i < images.length; i += batchSize) {
+    const chunk = images.slice(i, i + batchSize);
+    const result = await fetchCaptions(chunk);
+    captions.push(...(result.captions || []));
+  }
+
+  return { captions };
+}
+
 function applyTitlesToDom() {
   grid.querySelectorAll(".gallery__item").forEach((button) => {
     const id = button.dataset.imageId;
@@ -182,7 +194,7 @@ async function createGallery({ renew = false } = {}) {
   const requestId = ++captionRequestId;
 
   try {
-    const { captions } = await fetchCaptions(missing);
+    const { captions } = await fetchCaptionsInBatches(missing);
     if (requestId !== captionRequestId) return;
 
     captions.forEach((item) => {

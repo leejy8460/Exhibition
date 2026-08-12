@@ -9,9 +9,12 @@
 | 기본 (번호만) | https://leejy8460.github.io/Exhibition/ |
 | AI 제목 | https://leejy8460.github.io/Exhibition/ai/ |
 
-> GitHub Pages는 정적 파일만 호스팅합니다. AI 제목 생성 API는 Pages에서 직접 돌릴 수 없습니다.  
-> 온라인에서 AI 제목까지 쓰려면 API 서버를 따로 배포한 뒤 `ai/config.js`의 `CAPTION_API_BASE`에 주소를 넣으세요.  
-> 로컬에서는 아래 `npm start`로 페이지와 API를 함께 실행할 수 있습니다.
+AI 제목 API는 Cloudflare Worker로 배포되어 있습니다.
+
+- API: `https://atelier-nord-captions.mixolydian-eustoma.workers.dev`
+- 설정: `ai/config.js`의 `CAPTION_API_BASE`
+
+로컬에서는 `npm start`로 페이지와 Express API를 함께 실행할 수도 있습니다.
 
 ## 로컬 실행 (AI 제목 포함)
 

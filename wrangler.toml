@@ -1,0 +1,6 @@
+name = "atelier-nord-captions"
+main = "worker/captions.js"
+compatibility_date = "2024-11-12"
+
+[vars]
+# Secrets: OPENAI_API_KEY (set via wrangler secret / --secrets-file)
