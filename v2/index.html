@@ -3,14 +3,14 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>ATELIER NORD — Photo Exhibition</title>
+    <title>ATELIER NORD — Exhibition</title>
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600&family=Figtree:wght@400;500;600&display=swap"
       rel="stylesheet"
     />
-    <link rel="stylesheet" href="styles.css?v=3" />
+    <link rel="stylesheet" href="styles.css?v=7" />
   </head>
   <body>
     <header class="hero">
@@ -25,7 +25,7 @@
       <div class="hero__content">
         <p class="hero__brand">Atelier Nord</p>
         <h1 class="hero__title">빛의 가장자리에서</h1>
-        <p class="hero__lead">30점의 순간이 모인 가상의 사진 전시회</p>
+        <p class="hero__lead">사진·미술·우주 — 골라 보는 가상 전시회</p>
         <a class="hero__cta" href="#gallery">전시 입장</a>
       </div>
     </header>
@@ -36,6 +36,10 @@
           <div class="gallery__intro-top">
             <h2 id="gallery-heading">Collection</h2>
             <div class="gallery__controls">
+              <label class="gallery__source" for="source-select">
+                <span class="gallery__size-label">전시 종류</span>
+                <select class="gallery__source-select" id="source-select"></select>
+              </label>
               <label class="gallery__size" for="size-slider">
                 <span class="gallery__size-label">사진 크기</span>
                 <input
@@ -48,37 +52,41 @@
                   step="10"
                 />
               </label>
-              <button
-                class="gallery__renew"
-                id="renew-btn"
-                type="button"
-              >
+              <button class="gallery__renew" id="renew-btn" type="button">
                 전시 갱신
               </button>
             </div>
           </div>
-          <p>익명의 시선으로 포착한 풍경, 인물, 그리고 고요한 일상.</p>
+          <p id="gallery-blurb">익명의 시선으로 포착한 풍경, 인물, 그리고 고요한 일상.</p>
         </div>
         <div class="gallery__grid" id="gallery-grid"></div>
       </section>
     </main>
 
     <footer class="footer">
-      <p class="footer__brand">Atelier Nord</p>
+      <p class="footer__brand">Atelier Nord · v2</p>
       <p class="footer__note">
-        <a href="./ai/">AI 제목 버전 보기</a>
-        · <a href="./v2/">새 버전 (전시 종류 선택)</a>
-        · Images courtesy of Lorem Picsum
+        <span id="version-switch">
+          <a href="./ai/">AI 제목 버전 (사진 전시)</a>
+          ·
+        </span>
+        <span id="legacy-link"><a href="../">이전 기본 버전</a> · </span>
+        <span id="credit-note">Images courtesy of Lorem Picsum</span>
       </p>
     </footer>
 
-    <dialog class="lightbox" id="lightbox" aria-label="사진 확대 보기">
+    <dialog class="lightbox" id="lightbox" aria-label="작품 확대 보기">
       <button class="lightbox__close" type="button" aria-label="닫기">
         닫기
       </button>
       <img class="lightbox__image" id="lightbox-image" alt="" />
+      <p class="lightbox__caption" id="lightbox-caption"></p>
     </dialog>
 
-    <script src="script.js?v=3"></script>
+    <script>
+      window.EXHIBITION_USE_AI = false;
+    </script>
+    <script src="js/sources.js?v=9"></script>
+    <script src="js/gallery-app.js?v=9"></script>
   </body>
 </html>
