@@ -2,6 +2,8 @@ const IMAGE_COUNT = 30;
 
 /** Picsum에서 받는 원본 가로 크기(= 화면 표시 최대 크기) */
 const PHOTO_MAX_WIDTH = 480;
+const PHOTO_MIN_WIDTH = 160;
+const PHOTO_SIZE_KEY = "atelier-nord-photo-size";
 
 /** 가로줄마다 다른 세로 비율. 같은 줄의 사진끼리는 동일한 크기 */
 const ROW_SIZES = [
@@ -39,6 +41,21 @@ function applyPhotoSize() {
   const sizePx = `${size}px`;
   grid.style.setProperty("--photo-size", sizePx);
   document.documentElement.style.setProperty("--photo-size", sizePx);
+}
+
+function loadSavedPhotoSize() {
+  const saved = Number(localStorage.getItem(PHOTO_SIZE_KEY));
+  if (
+    Number.isFinite(saved) &&
+    saved >= PHOTO_MIN_WIDTH &&
+    saved <= PHOTO_MAX_WIDTH
+  ) {
+    sizeSlider.value = String(saved);
+  }
+}
+
+function savePhotoSize() {
+  localStorage.setItem(PHOTO_SIZE_KEY, String(getPhotoSize()));
 }
 
 function getColumnCount() {
@@ -289,8 +306,11 @@ function openLightbox(src, label) {
 }
 
 sizeSlider.max = String(PHOTO_MAX_WIDTH);
+sizeSlider.min = String(PHOTO_MIN_WIDTH);
+loadSavedPhotoSize();
 sizeSlider.addEventListener("input", () => {
   applyPhotoSize();
+  savePhotoSize();
   scheduleRelayout();
 });
 

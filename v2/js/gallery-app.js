@@ -8,6 +8,8 @@
 
   const USE_AI = Boolean(window.EXHIBITION_USE_AI);
   const PHOTO_MAX_WIDTH = 480;
+  const PHOTO_MIN_WIDTH = 160;
+  const PHOTO_SIZE_KEY = "atelier-nord-photo-size";
   const ROW_HEIGHTS = [640, 480, 720, 560, 600];
 
   const grid = document.getElementById("gallery-grid");
@@ -38,6 +40,21 @@
     const sizePx = `${size}px`;
     grid.style.setProperty("--photo-size", sizePx);
     document.documentElement.style.setProperty("--photo-size", sizePx);
+  }
+
+  function loadSavedPhotoSize() {
+    const saved = Number(localStorage.getItem(PHOTO_SIZE_KEY));
+    if (
+      Number.isFinite(saved) &&
+      saved >= PHOTO_MIN_WIDTH &&
+      saved <= PHOTO_MAX_WIDTH
+    ) {
+      sizeSlider.value = String(saved);
+    }
+  }
+
+  function savePhotoSize() {
+    localStorage.setItem(PHOTO_SIZE_KEY, String(getPhotoSize()));
   }
 
   function getColumnCount() {
@@ -317,11 +334,14 @@
   }
 
   sizeSlider.max = String(PHOTO_MAX_WIDTH);
+  sizeSlider.min = String(PHOTO_MIN_WIDTH);
+  loadSavedPhotoSize();
   populateSourceSelect();
   updateSourceCopy(currentSource());
 
   sizeSlider.addEventListener("input", () => {
     applyPhotoSize();
+    savePhotoSize();
     scheduleRelayout();
   });
 
