@@ -10,6 +10,9 @@
   const PHOTO_MAX_WIDTH = 480;
   const PHOTO_MIN_WIDTH = 160;
   const PHOTO_SIZE_KEY = "atelier-nord-photo-size";
+  const WORKS_CACHE_PREFIX = "atelier-nord-works-v1";
+  const IMAGE_CACHE_NAME = "atelier-nord-images-v1";
+  const DEFAULT_SOURCE = "met";
   const ROW_HEIGHTS = [640, 480, 720, 560, 600];
 
   const grid = document.getElementById("gallery-grid");
@@ -30,6 +33,7 @@
   let captionRequestId = 0;
   let currentWorks = [];
   let loading = false;
+  let activeBlobUrls = [];
 
   function getPhotoSize() {
     return Number(sizeSlider.value);
@@ -55,6 +59,96 @@
 
   function savePhotoSize() {
     localStorage.setItem(PHOTO_SIZE_KEY, String(getPhotoSize()));
+  }
+
+  function worksCacheKey(sourceId) {
+    return `${WORKS_CACHE_PREFIX}:${sourceId}${USE_AI ? ":ai" : ""}`;
+  }
+
+  function loadWorksCache(sourceId) {
+    try {
+      const raw = localStorage.getItem(worksCacheKey(sourceId));
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (!Array.isArray(parsed?.works) || parsed.works.length === 0) return null;
+      return parsed.works;
+    } catch {
+      return null;
+    }
+  }
+
+  function saveWorksCache(sourceId, works) {
+    try {
+      localStorage.setItem(
+        worksCacheKey(sourceId),
+        JSON.stringify({ savedAt: Date.now(), works })
+      );
+    } catch (error) {
+      console.warn("works cache save failed", error);
+    }
+  }
+
+  async function getImageCache() {
+    if (!("caches" in window)) return null;
+    try {
+      return await caches.open(IMAGE_CACHE_NAME);
+    } catch {
+      return null;
+    }
+  }
+
+  function revokeBlobUrls() {
+    activeBlobUrls.forEach((url) => URL.revokeObjectURL(url));
+    activeBlobUrls = [];
+  }
+
+  async function resolveImageSrc(url) {
+    if (!url) return url;
+    const cache = await getImageCache();
+    if (!cache) return url;
+
+    try {
+      const match = await cache.match(url);
+      if (match) {
+        const blob = await match.blob();
+        const objectUrl = URL.createObjectURL(blob);
+        activeBlobUrls.push(objectUrl);
+        return objectUrl;
+      }
+    } catch {
+      /* fall through */
+    }
+
+    return url;
+  }
+
+  async function cacheImageUrl(url) {
+    if (!url) return;
+    const cache = await getImageCache();
+    if (!cache) return;
+
+    try {
+      const existing = await cache.match(url);
+      if (existing) return;
+      const response = await fetch(url, { mode: "cors", credentials: "omit" });
+      if (response.ok) {
+        await cache.put(url, response.clone());
+      }
+    } catch {
+      /* ignore network/CORS failures */
+    }
+  }
+
+  function warmImageCache(works) {
+    works.forEach((work) => {
+      cacheImageUrl(work.imageUrl);
+      if (work.largeUrl && work.largeUrl !== work.imageUrl) {
+        cacheImageUrl(work.largeUrl);
+      }
+      if (work.thumbUrl && work.thumbUrl !== work.imageUrl) {
+        cacheImageUrl(work.thumbUrl);
+      }
+    });
   }
 
   function getColumnCount() {
@@ -87,7 +181,7 @@
       option.textContent = source.label;
       sourceSelect.append(option);
     });
-    sourceSelect.value = "picsum";
+    sourceSelect.value = DEFAULT_SOURCE;
   }
 
   function updateSourceCopy(source) {
@@ -159,13 +253,15 @@
     });
   }
 
-  function renderWorks(works, { pendingAi = false } = {}) {
+  async function renderWorks(works, { pendingAi = false } = {}) {
     const columnCount = getColumnCount();
     currentColumnCount = columnCount;
     disconnectObserver();
+    revokeBlobUrls();
     grid.replaceChildren();
 
     const fragment = document.createDocumentFragment();
+    const imageNodes = [];
 
     works.forEach((work, index) => {
       const row = Math.floor(index / columnCount);
@@ -184,7 +280,6 @@
       button.setAttribute("aria-label", `${caption} 크게 보기`);
 
       const img = document.createElement("img");
-      img.src = work.imageUrl;
       img.alt = caption;
       img.loading = "lazy";
       img.width = work.width || PHOTO_MAX_WIDTH;
@@ -216,10 +311,17 @@
       });
 
       fragment.append(button);
+      imageNodes.push({ img, url: work.imageUrl });
     });
 
     grid.append(fragment);
     observeItems();
+
+    await Promise.all(
+      imageNodes.map(async ({ img, url }) => {
+        img.src = await resolveImageSrc(url);
+      })
+    );
   }
 
   function applyAiTitles(captions) {
@@ -232,7 +334,8 @@
       return title ? { ...work, title } : work;
     });
 
-    renderWorks(currentWorks);
+    saveWorksCache(currentSource().id, currentWorks);
+    return renderWorks(currentWorks);
   }
 
   async function maybeGenerateAiTitles(source, works) {
@@ -251,15 +354,33 @@
     try {
       const captions = await fetchCaptionsInBatches(missing);
       if (requestId !== captionRequestId) return;
-      applyAiTitles(captions);
+      await applyAiTitles(captions);
     } catch (error) {
       console.error(error);
       if (requestId !== captionRequestId) return;
-      renderWorks(currentWorks);
+      await renderWorks(currentWorks);
     }
   }
 
-  async function loadExhibition({ renewHero = true } = {}) {
+  async function fetchFreshWorks(source) {
+    let works = await source.fetchWorks(IMAGE_COUNT);
+    if (works.length < IMAGE_COUNT && source.id !== "picsum") {
+      const more = await source.fetchWorks(IMAGE_COUNT);
+      const seen = new Set(works.map((work) => work.id));
+      more.forEach((work) => {
+        if (!seen.has(work.id) && works.length < IMAGE_COUNT) {
+          seen.add(work.id);
+          works.push(work);
+        }
+      });
+    }
+    return works.slice(0, IMAGE_COUNT);
+  }
+
+  async function loadExhibition({
+    renewHero = true,
+    forceRefresh = false,
+  } = {}) {
     if (loading) return;
     loading = true;
 
@@ -269,41 +390,51 @@
 
     renewBtn.disabled = true;
     sourceSelect.disabled = true;
-    renewBtn.textContent = "불러오는 중…";
+    renewBtn.textContent = forceRefresh ? "불러오는 중…" : "불러오는 중…";
     grid.classList.add("is-renewing");
 
     if (lightbox.open) lightbox.close();
 
     try {
-      if (renewHero && heroImage) {
+      let works = forceRefresh ? null : loadWorksCache(source.id);
+      let fromCache = Boolean(works);
+
+      if (!works) {
+        works = await fetchFreshWorks(source);
+        fromCache = false;
+        saveWorksCache(source.id, works);
+      }
+
+      currentWorks = works;
+
+      if (heroImage && currentWorks[0]) {
+        const heroUrl = currentWorks[0].largeUrl || currentWorks[0].imageUrl;
+        heroImage.src = await resolveImageSrc(heroUrl);
+        cacheImageUrl(heroUrl);
+      } else if (renewHero && heroImage && !fromCache) {
         heroImage.src = source.heroUrl();
       }
 
-      let works = await source.fetchWorks(IMAGE_COUNT);
-      if (works.length < IMAGE_COUNT && source.id !== "picsum") {
-        const more = await source.fetchWorks(IMAGE_COUNT);
-        const seen = new Set(works.map((work) => work.id));
-        more.forEach((work) => {
-          if (!seen.has(work.id) && works.length < IMAGE_COUNT) {
-            seen.add(work.id);
-            works.push(work);
-          }
-        });
-      }
-
-      currentWorks = works.slice(0, IMAGE_COUNT);
-
-      if (renewHero && heroImage && currentWorks[0]) {
-        heroImage.src = currentWorks[0].largeUrl || currentWorks[0].imageUrl;
-      }
-
-      const pendingAi = USE_AI && !source.hasMetadata;
-      renderWorks(currentWorks, { pendingAi });
+      const pendingAi =
+        USE_AI && !source.hasMetadata && currentWorks.some((work) => !work.title);
+      await renderWorks(currentWorks, { pendingAi });
       await maybeGenerateAiTitles(source, currentWorks);
+      warmImageCache(currentWorks);
     } catch (error) {
       console.error(error);
-      grid.innerHTML =
-        '<p class="gallery__error">전시를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.</p>';
+      const cached = loadWorksCache(source.id);
+      if (cached?.length) {
+        currentWorks = cached;
+        await renderWorks(currentWorks);
+        if (heroImage && currentWorks[0]) {
+          heroImage.src = await resolveImageSrc(
+            currentWorks[0].largeUrl || currentWorks[0].imageUrl
+          );
+        }
+      } else {
+        grid.innerHTML =
+          '<p class="gallery__error">전시를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.</p>';
+      }
     } finally {
       grid.classList.remove("is-renewing");
       renewBtn.disabled = false;
@@ -318,19 +449,23 @@
     relayoutTimer = window.setTimeout(() => {
       if (getColumnCount() !== currentColumnCount && currentWorks.length) {
         const source = currentSource();
-        const pendingAi = USE_AI && !source.hasMetadata && currentWorks.some((work) => !work.title);
+        const pendingAi =
+          USE_AI &&
+          !source.hasMetadata &&
+          currentWorks.some((work) => !work.title);
         renderWorks(currentWorks, { pendingAi });
       }
     }, 120);
   }
 
-  function openLightbox(src, caption, artist) {
-    lightboxImage.src = src;
+  async function openLightbox(src, caption, artist) {
+    lightboxImage.src = await resolveImageSrc(src);
     lightboxImage.alt = caption;
     if (lightboxCaption) {
       lightboxCaption.textContent = artist ? `${caption} — ${artist}` : caption;
     }
     lightbox.showModal();
+    cacheImageUrl(src);
   }
 
   sizeSlider.max = String(PHOTO_MAX_WIDTH);
@@ -346,11 +481,11 @@
   });
 
   sourceSelect.addEventListener("change", () => {
-    loadExhibition({ renewHero: true });
+    loadExhibition({ renewHero: true, forceRefresh: false });
   });
 
   renewBtn.addEventListener("click", () => {
-    loadExhibition({ renewHero: true });
+    loadExhibition({ renewHero: true, forceRefresh: true });
     document.getElementById("gallery").scrollIntoView({
       behavior: "smooth",
       block: "start",
@@ -367,5 +502,5 @@
     if (event.target === lightbox) lightbox.close();
   });
 
-  loadExhibition({ renewHero: false });
+  loadExhibition({ renewHero: false, forceRefresh: false });
 })();
