@@ -22,7 +22,6 @@
   const sourceSelect = document.getElementById("source-select");
   const addFolderBtn = document.getElementById("add-folder-btn");
   const removeFolderBtn = document.getElementById("remove-folder-btn");
-  const heroImage = document.querySelector(".hero__image");
   const galleryBlurb = document.getElementById("gallery-blurb");
   const creditNote = document.getElementById("credit-note");
   const versionSwitch = document.getElementById("version-switch");
@@ -468,10 +467,7 @@
     return works.slice(0, IMAGE_COUNT);
   }
 
-  async function loadExhibition({
-    renewHero = true,
-    forceRefresh = false,
-  } = {}) {
+  async function loadExhibition({ forceRefresh = false } = {}) {
     if (loading) return;
     loading = true;
 
@@ -491,25 +487,15 @@
     try {
       const skipCache = forceRefresh || source.isLocal;
       let works = skipCache ? null : loadWorksCache(source.id);
-      let fromCache = Boolean(works);
 
       if (!works) {
         works = await fetchFreshWorks(source);
-        fromCache = false;
         if (!source.isLocal) {
           saveWorksCache(source.id, works);
         }
       }
 
       currentWorks = works;
-
-      if (heroImage && currentWorks[0]) {
-        const heroUrl = currentWorks[0].largeUrl || currentWorks[0].imageUrl;
-        heroImage.src = await resolveImageSrc(heroUrl);
-        cacheImageUrl(heroUrl);
-      } else if (renewHero && heroImage && !fromCache && source.heroUrl()) {
-        heroImage.src = source.heroUrl();
-      }
 
       const pendingAi =
         USE_AI &&
@@ -525,11 +511,6 @@
       if (cached?.length) {
         currentWorks = cached;
         await renderWorks(currentWorks);
-        if (heroImage && currentWorks[0]) {
-          heroImage.src = await resolveImageSrc(
-            currentWorks[0].largeUrl || currentWorks[0].imageUrl
-          );
-        }
       } else {
         grid.innerHTML = `<p class="gallery__error">${
           error?.message ||
@@ -576,7 +557,7 @@
       const record = await LocalFolders.pickAndAddFolder();
       await populateSourceSelect(record.id);
       updateSourceCopy(currentSource());
-      await loadExhibition({ renewHero: true, forceRefresh: true });
+      await loadExhibition({ forceRefresh: true });
     } catch (error) {
       if (error?.name === "AbortError") return;
       window.alert(error?.message || "폴더를 추가하지 못했습니다.");
@@ -599,7 +580,7 @@
       revokeBlobUrls();
       await populateSourceSelect(DEFAULT_SOURCE);
       updateSourceCopy(currentSource());
-      await loadExhibition({ renewHero: true, forceRefresh: false });
+      await loadExhibition({ forceRefresh: false });
     } catch (error) {
       window.alert(error?.message || "폴더 전시를 삭제하지 못했습니다.");
     }
@@ -617,11 +598,11 @@
 
   sourceSelect.addEventListener("change", () => {
     updateFolderButtons();
-    loadExhibition({ renewHero: true, forceRefresh: false });
+    loadExhibition({ forceRefresh: false });
   });
 
   renewBtn.addEventListener("click", () => {
-    loadExhibition({ renewHero: true, forceRefresh: true });
+    loadExhibition({ forceRefresh: true });
     document.getElementById("gallery").scrollIntoView({
       behavior: "smooth",
       block: "start",
@@ -647,6 +628,6 @@
 
   populateSourceSelect(DEFAULT_SOURCE).then(() => {
     updateSourceCopy(currentSource());
-    loadExhibition({ renewHero: false, forceRefresh: false });
+    loadExhibition({ forceRefresh: false });
   });
 })();
