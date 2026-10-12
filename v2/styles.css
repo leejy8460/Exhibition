@@ -236,10 +236,25 @@ a {
   transform: translateY(-1px);
 }
 
+.gallery__renew--danger {
+  border-color: #8a3d3d;
+  color: #8a3d3d;
+}
+
+.gallery__renew--danger:hover,
+.gallery__renew--danger:focus-visible {
+  background: #8a3d3d;
+  color: var(--paper);
+}
+
 .gallery__renew:disabled {
   opacity: 0.55;
   cursor: wait;
   transform: none;
+}
+
+.gallery__renew[hidden] {
+  display: none;
 }
 
 .gallery__grid.is-renewing {

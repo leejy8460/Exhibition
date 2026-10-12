@@ -80,9 +80,28 @@
           "sculpture",
         ];
         const query = queries[Math.floor(Math.random() * queries.length)];
+        // Met retired /v1/search on 2026-10-01; use paginated /v1.1
+        const pageSize = 100;
+        const probe = await fetch(
+          `https://collectionapi.metmuseum.org/public/collection/v1.1/search?hasImages=true&isPublicDomain=true&q=${encodeURIComponent(query)}&offset=0&limit=1`
+        ).then((response) => {
+          if (!response.ok) {
+            throw new Error(`Met 검색 API 오류 (${response.status})`);
+          }
+          return response.json();
+        });
+        const total = Number(probe.total) || 0;
+        const maxOffset = Math.max(0, Math.min(total - 1, 10000 - pageSize));
+        const offset =
+          maxOffset > 0 ? Math.floor(Math.random() * (maxOffset + 1)) : 0;
         const search = await fetch(
-          `https://collectionapi.metmuseum.org/public/collection/v1/search?hasImages=true&isPublicDomain=true&q=${encodeURIComponent(query)}`
-        ).then((response) => response.json());
+          `https://collectionapi.metmuseum.org/public/collection/v1.1/search?hasImages=true&isPublicDomain=true&q=${encodeURIComponent(query)}&offset=${offset}&limit=${pageSize}`
+        ).then((response) => {
+          if (!response.ok) {
+            throw new Error(`Met 검색 API 오류 (${response.status})`);
+          }
+          return response.json();
+        });
 
         const ids = shuffle(search.objectIDs || []).slice(0, count * 4);
         const works = await mapPool(ids, 6, async (objectId) => {

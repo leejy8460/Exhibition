@@ -5,6 +5,7 @@
     getSource,
     listSources,
   } = window.ExhibitionSources;
+  const LocalFolders = window.ExhibitionLocalFolders;
 
   const USE_AI = Boolean(window.EXHIBITION_USE_AI);
   const PHOTO_MAX_WIDTH = 480;
@@ -19,6 +20,8 @@
   const renewBtn = document.getElementById("renew-btn");
   const sizeSlider = document.getElementById("size-slider");
   const sourceSelect = document.getElementById("source-select");
+  const addFolderBtn = document.getElementById("add-folder-btn");
+  const removeFolderBtn = document.getElementById("remove-folder-btn");
   const heroImage = document.querySelector(".hero__image");
   const galleryBlurb = document.getElementById("gallery-blurb");
   const creditNote = document.getElementById("credit-note");
@@ -34,6 +37,7 @@
   let currentWorks = [];
   let loading = false;
   let activeBlobUrls = [];
+  let localFolderRecords = [];
 
   function getPhotoSize() {
     return Number(sizeSlider.value);
@@ -66,6 +70,7 @@
   }
 
   function loadWorksCache(sourceId) {
+    if (LocalFolders.isLocalSourceId(sourceId)) return null;
     try {
       const raw = localStorage.getItem(worksCacheKey(sourceId));
       if (!raw) return null;
@@ -78,6 +83,7 @@
   }
 
   function saveWorksCache(sourceId, works) {
+    if (LocalFolders.isLocalSourceId(sourceId)) return;
     try {
       localStorage.setItem(
         worksCacheKey(sourceId),
@@ -86,6 +92,10 @@
     } catch (error) {
       console.warn("works cache save failed", error);
     }
+  }
+
+  function clearWorksCache(sourceId) {
+    localStorage.removeItem(worksCacheKey(sourceId));
   }
 
   async function getImageCache() {
@@ -97,13 +107,31 @@
     }
   }
 
-  function revokeBlobUrls() {
-    activeBlobUrls.forEach((url) => URL.revokeObjectURL(url));
-    activeBlobUrls = [];
+  function revokeBlobUrls(keepUrls = []) {
+    const keep = new Set(keepUrls.filter(Boolean));
+    activeBlobUrls.forEach((url) => {
+      if (!keep.has(url)) URL.revokeObjectURL(url);
+    });
+    activeBlobUrls = [...keep];
+  }
+
+  function localBlobUrlsFromWorks(works) {
+    const urls = [];
+    works.forEach((work) => {
+      if (!work?.isLocalBlob) return;
+      [work.imageUrl, work.thumbUrl, work.largeUrl].forEach((url) => {
+        if (isBlobUrl(url) && !urls.includes(url)) urls.push(url);
+      });
+    });
+    return urls;
+  }
+
+  function isBlobUrl(url) {
+    return typeof url === "string" && url.startsWith("blob:");
   }
 
   async function resolveImageSrc(url) {
-    if (!url) return url;
+    if (!url || isBlobUrl(url)) return url;
     const cache = await getImageCache();
     if (!cache) return url;
 
@@ -123,7 +151,7 @@
   }
 
   async function cacheImageUrl(url) {
-    if (!url) return;
+    if (!url || isBlobUrl(url)) return;
     const cache = await getImageCache();
     if (!cache) return;
 
@@ -135,7 +163,7 @@
         await cache.put(url, response.clone());
       }
     } catch {
-      /* ignore network/CORS failures */
+      /* ignore */
     }
   }
 
@@ -169,29 +197,81 @@
     }
   }
 
-  function currentSource() {
-    return getSource(sourceSelect.value);
+  function resolveSource(id) {
+    if (LocalFolders.isLocalSourceId(id)) {
+      const record = localFolderRecords.find((item) => item.id === id);
+      if (record) return LocalFolders.createLocalSource(record);
+    }
+    return getSource(id);
   }
 
-  function populateSourceSelect() {
+  function currentSource() {
+    return resolveSource(sourceSelect.value);
+  }
+
+  async function refreshLocalFolders() {
+    try {
+      localFolderRecords = await LocalFolders.listFolders();
+    } catch (error) {
+      console.warn(error);
+      localFolderRecords = [];
+    }
+  }
+
+  async function populateSourceSelect(preferredId) {
+    const selected = preferredId || sourceSelect.value || DEFAULT_SOURCE;
+    await refreshLocalFolders();
     sourceSelect.replaceChildren();
+
     listSources().forEach((source) => {
       const option = document.createElement("option");
       option.value = source.id;
       option.textContent = source.label;
       sourceSelect.append(option);
     });
-    sourceSelect.value = DEFAULT_SOURCE;
+
+    localFolderRecords
+      .slice()
+      .sort((a, b) => a.name.localeCompare(b.name, "ko"))
+      .forEach((record) => {
+        const option = document.createElement("option");
+        option.value = record.id;
+        option.textContent = `로컬 — ${record.name}`;
+        sourceSelect.append(option);
+      });
+
+    const exists = [...sourceSelect.options].some(
+      (option) => option.value === selected
+    );
+    sourceSelect.value = exists ? selected : DEFAULT_SOURCE;
+    updateFolderButtons();
+  }
+
+  function updateFolderButtons() {
+    const isLocal = LocalFolders.isLocalSourceId(sourceSelect.value);
+    if (removeFolderBtn) {
+      removeFolderBtn.hidden = !isLocal;
+      removeFolderBtn.disabled = !isLocal;
+    }
+    if (addFolderBtn) {
+      addFolderBtn.disabled = !LocalFolders.supportsDirectoryPicker();
+      addFolderBtn.title = LocalFolders.supportsDirectoryPicker()
+        ? "이 컴퓨터의 이미지 폴더를 전시로 추가"
+        : "Chrome 또는 Edge에서만 로컬 폴더를 추가할 수 있습니다";
+    }
   }
 
   function updateSourceCopy(source) {
     if (galleryBlurb) galleryBlurb.textContent = source.blurb;
     if (creditNote) {
-      creditNote.textContent = `Images courtesy of ${source.credit}`;
+      creditNote.textContent = source.isLocal
+        ? source.credit
+        : `Images courtesy of ${source.credit}`;
     }
     if (versionSwitch) {
       versionSwitch.hidden = source.id !== "picsum";
     }
+    updateFolderButtons();
   }
 
   function formatCaption(label, work, fallbackTitle) {
@@ -257,7 +337,7 @@
     const columnCount = getColumnCount();
     currentColumnCount = columnCount;
     disconnectObserver();
-    revokeBlobUrls();
+    revokeBlobUrls(localBlobUrlsFromWorks(works));
     grid.replaceChildren();
 
     const fragment = document.createDocumentFragment();
@@ -270,6 +350,13 @@
       const label = `No. ${String(number).padStart(2, "0")}`;
       const titleForDisplay = pendingAi && !work.title ? "…" : work.title;
       const caption = formatCaption(label, work, titleForDisplay);
+
+      if (
+        isBlobUrl(work.imageUrl) &&
+        !activeBlobUrls.includes(work.imageUrl)
+      ) {
+        activeBlobUrls.push(work.imageUrl);
+      }
 
       const button = document.createElement("button");
       button.type = "button";
@@ -339,7 +426,7 @@
   }
 
   async function maybeGenerateAiTitles(source, works) {
-    if (!USE_AI || source.hasMetadata) return;
+    if (!USE_AI || source.hasMetadata || source.isLocal) return;
 
     const missing = works
       .filter((work) => !work.title)
@@ -364,7 +451,11 @@
 
   async function fetchFreshWorks(source) {
     let works = await source.fetchWorks(IMAGE_COUNT);
-    if (works.length < IMAGE_COUNT && source.id !== "picsum") {
+    if (
+      works.length < IMAGE_COUNT &&
+      source.id !== "picsum" &&
+      !source.isLocal
+    ) {
       const more = await source.fetchWorks(IMAGE_COUNT);
       const seen = new Set(works.map((work) => work.id));
       more.forEach((work) => {
@@ -390,19 +481,24 @@
 
     renewBtn.disabled = true;
     sourceSelect.disabled = true;
-    renewBtn.textContent = forceRefresh ? "불러오는 중…" : "불러오는 중…";
+    if (addFolderBtn) addFolderBtn.disabled = true;
+    if (removeFolderBtn) removeFolderBtn.disabled = true;
+    renewBtn.textContent = "불러오는 중…";
     grid.classList.add("is-renewing");
 
     if (lightbox.open) lightbox.close();
 
     try {
-      let works = forceRefresh ? null : loadWorksCache(source.id);
+      const skipCache = forceRefresh || source.isLocal;
+      let works = skipCache ? null : loadWorksCache(source.id);
       let fromCache = Boolean(works);
 
       if (!works) {
         works = await fetchFreshWorks(source);
         fromCache = false;
-        saveWorksCache(source.id, works);
+        if (!source.isLocal) {
+          saveWorksCache(source.id, works);
+        }
       }
 
       currentWorks = works;
@@ -411,12 +507,15 @@
         const heroUrl = currentWorks[0].largeUrl || currentWorks[0].imageUrl;
         heroImage.src = await resolveImageSrc(heroUrl);
         cacheImageUrl(heroUrl);
-      } else if (renewHero && heroImage && !fromCache) {
+      } else if (renewHero && heroImage && !fromCache && source.heroUrl()) {
         heroImage.src = source.heroUrl();
       }
 
       const pendingAi =
-        USE_AI && !source.hasMetadata && currentWorks.some((work) => !work.title);
+        USE_AI &&
+        !source.hasMetadata &&
+        !source.isLocal &&
+        currentWorks.some((work) => !work.title);
       await renderWorks(currentWorks, { pendingAi });
       await maybeGenerateAiTitles(source, currentWorks);
       warmImageCache(currentWorks);
@@ -432,8 +531,10 @@
           );
         }
       } else {
-        grid.innerHTML =
-          '<p class="gallery__error">전시를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.</p>';
+        grid.innerHTML = `<p class="gallery__error">${
+          error?.message ||
+          "전시를 불러오지 못했습니다. 잠시 후 다시 시도해 주세요."
+        }</p>`;
       }
     } finally {
       grid.classList.remove("is-renewing");
@@ -441,6 +542,7 @@
       sourceSelect.disabled = false;
       renewBtn.textContent = "전시 갱신";
       loading = false;
+      updateFolderButtons();
     }
   }
 
@@ -452,6 +554,7 @@
         const pendingAi =
           USE_AI &&
           !source.hasMetadata &&
+          !source.isLocal &&
           currentWorks.some((work) => !work.title);
         renderWorks(currentWorks, { pendingAi });
       }
@@ -468,11 +571,43 @@
     cacheImageUrl(src);
   }
 
+  async function handleAddFolder() {
+    try {
+      const record = await LocalFolders.pickAndAddFolder();
+      await populateSourceSelect(record.id);
+      updateSourceCopy(currentSource());
+      await loadExhibition({ renewHero: true, forceRefresh: true });
+    } catch (error) {
+      if (error?.name === "AbortError") return;
+      window.alert(error?.message || "폴더를 추가하지 못했습니다.");
+    }
+  }
+
+  async function handleRemoveFolder() {
+    const id = sourceSelect.value;
+    if (!LocalFolders.isLocalSourceId(id)) return;
+
+    const source = currentSource();
+    const confirmed = window.confirm(
+      `"${source.label}" 전시를 목록에서 삭제할까요?\n(폴더 자체는 삭제되지 않습니다.)`
+    );
+    if (!confirmed) return;
+
+    try {
+      await LocalFolders.deleteFolder(id);
+      clearWorksCache(id);
+      revokeBlobUrls();
+      await populateSourceSelect(DEFAULT_SOURCE);
+      updateSourceCopy(currentSource());
+      await loadExhibition({ renewHero: true, forceRefresh: false });
+    } catch (error) {
+      window.alert(error?.message || "폴더 전시를 삭제하지 못했습니다.");
+    }
+  }
+
   sizeSlider.max = String(PHOTO_MAX_WIDTH);
   sizeSlider.min = String(PHOTO_MIN_WIDTH);
   loadSavedPhotoSize();
-  populateSourceSelect();
-  updateSourceCopy(currentSource());
 
   sizeSlider.addEventListener("input", () => {
     applyPhotoSize();
@@ -481,6 +616,7 @@
   });
 
   sourceSelect.addEventListener("change", () => {
+    updateFolderButtons();
     loadExhibition({ renewHero: true, forceRefresh: false });
   });
 
@@ -492,6 +628,13 @@
     });
   });
 
+  if (addFolderBtn) {
+    addFolderBtn.addEventListener("click", handleAddFolder);
+  }
+  if (removeFolderBtn) {
+    removeFolderBtn.addEventListener("click", handleRemoveFolder);
+  }
+
   window.addEventListener("resize", scheduleRelayout);
 
   lightbox.querySelector(".lightbox__close").addEventListener("click", () => {
@@ -502,5 +645,8 @@
     if (event.target === lightbox) lightbox.close();
   });
 
-  loadExhibition({ renewHero: false, forceRefresh: false });
+  populateSourceSelect(DEFAULT_SOURCE).then(() => {
+    updateSourceCopy(currentSource());
+    loadExhibition({ renewHero: false, forceRefresh: false });
+  });
 })();

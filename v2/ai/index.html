@@ -12,7 +12,7 @@
     />
     <link rel="icon" href="../favicon.png" type="image/png" />
     <link rel="apple-touch-icon" href="../favicon.png" />
-    <link rel="stylesheet" href="../styles.css?v=7" />
+    <link rel="stylesheet" href="../styles.css?v=14" />
   </head>
   <body>
     <header class="hero">
@@ -54,6 +54,17 @@
                   step="10"
                 />
               </label>
+              <button class="gallery__renew" id="add-folder-btn" type="button">
+                폴더 추가
+              </button>
+              <button
+                class="gallery__renew gallery__renew--danger"
+                id="remove-folder-btn"
+                type="button"
+                hidden
+              >
+                폴더 삭제
+              </button>
               <button class="gallery__renew" id="renew-btn" type="button">
                 전시 갱신
               </button>
@@ -91,7 +102,8 @@
     <script>
       window.EXHIBITION_USE_AI = true;
     </script>
-    <script src="../js/sources.js?v=11"></script>
-    <script src="../js/gallery-app.js?v=11"></script>
+    <script src="../js/sources.js?v=14"></script>
+    <script src="../js/local-folders.js?v=14"></script>
+    <script src="../js/gallery-app.js?v=14"></script>
   </body>
 </html>
